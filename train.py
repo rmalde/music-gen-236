@@ -28,6 +28,7 @@ class Trainer():
         self.output_dir = output_dir
         self.output_prefix = output_prefix
         self.n_critic = n_critic
+        self.epochs_per_save = epochs_per_save
 
         self.discriminator = WaveGANDiscriminator().to(self.device)
         self.generator = WaveGANGenerator().to(self.device)
@@ -171,7 +172,7 @@ class Trainer():
                 tb.add_scalar("Disc loss", disc_loss, step*(epoch + 1))
 
                 # scheduler.step()
-            if epoch % 5 == 0:
+            if epoch % self.epochs_per_save == 0:
                 path = os.path.join(self.output_dir, f"{self.output_prefix}-{epoch}.pt")
                 save_gen_and_disc(self.generator, self.discriminator, path)
 
