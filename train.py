@@ -18,7 +18,8 @@ from discriminator import WaveGANDiscriminator
 class Trainer():
     def __init__(
         self, dataloader, device="cpu", epochs=EPOCHS, noise_dim=NOISE_DIM,
-        output_dir=MODEL_OUTPUT_DIR, output_prefix="WaveGAN", epochs_per_save=EPOCHS_PER_SAVE
+        output_dir=MODEL_OUTPUT_DIR, output_prefix="WaveGAN", epochs_per_save=EPOCHS_PER_SAVE,
+        n_critic=5
     ):
         self.dataloader = dataloader
         self.epochs = epochs
@@ -26,6 +27,7 @@ class Trainer():
         self.noise_dim = noise_dim
         self.output_dir = output_dir
         self.output_prefix = output_prefix
+        self.n_critic = n_critic
 
         self.discriminator = WaveGANDiscriminator().to(self.device)
         self.generator = WaveGANGenerator().to(self.device)
@@ -62,22 +64,16 @@ class Trainer():
         disc_out_gen = self.discriminator(generated)
         disc_out_real = self.discriminator(real)
 
-        alpha = torch.FloatTensor(batch_size, 1, 1).uniform_(0, 1).to(self.device)
-        alpha = alpha.expand(batch_size, real.size(1), real.size(2))
+        epsilon = torch.rand(batch_size, 1, 1, device=device, requires_grad=True)
+        mixed = epsilon * real + (1 - epsilon) * generated
+        mixed_scores = self.discriminator(mixed)
 
-        interpolated = (1 - alpha) * real.data + (alpha) * generated.data[:batch_size]
-        interpolated = Variable(interpolated, requires_grad=True)
-
-        prob_interpolated = self.discriminator(interpolated)
-        grad_inputs = interpolated
-        ones = torch.ones(prob_interpolated.size()).to(self.device)
         gradients = grad(
-            outputs=prob_interpolated,
-            inputs=grad_inputs,
-            grad_outputs=ones,
+            inputs=mixed,
+            outputs=mixed_scores,
+            grad_outputs=torch.ones_like(mixed_scores),
             create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
+            retain_graph=True
         )[0]
         # calculate gradient penalty
         grad_penalty = (
@@ -87,9 +83,13 @@ class Trainer():
         assert not (torch.isnan(grad_penalty))
         assert not (torch.isnan(disc_out_gen.mean()))
         assert not (torch.isnan(disc_out_real.mean()))
-        loss_wd = disc_out_gen.mean() - disc_out_real.mean()
-        loss = loss_wd + grad_penalty
-        return loss, loss_wd
+        loss = (disc_out_gen - disc_out_real + grad_penalty).mean()
+        return loss
+
+    def calc_gen_loss(self, generated):
+        disc_output_gen = self.discriminator(generated)
+        loss = -torch.mean(disc_output_gen)
+        return loss
     
     def calc_disc_loss_simple(self, real, generated):
         disc_out_gen = self.discriminator(generated)
@@ -100,7 +100,7 @@ class Trainer():
         disc_loss = torch.mean(torch.stack([disc_loss_gen, disc_loss_real]))
         return disc_loss
 
-    def calc_gen_loss(self, generated):
+    def calc_gen_loss_simple(self, generated):
         disc_output_gen = self.discriminator(generated)
         gen_loss = self.criterion(disc_output_gen, torch.ones_like(disc_output_gen))
         return gen_loss
@@ -126,32 +126,31 @@ class Trainer():
             for step, real in pbar:
                 if real.shape[2] != SLICE_LEN: continue
                 real = real.to(self.device)
-                
-                batch_size = real.shape[0]
-                noise = sample_noise(batch_size, self.noise_dim).to(self.device)
+
+                mean_disc_loss = 0
 
                 ###DISCRIMINATOR LEARNING 
 
-                toggle_grads(self.generator, False)
-                toggle_grads(self.discriminator, True)
+                for _ in range(self.n_critic):
+                    self.apply_zero_grad()
 
-                generated = self.generator(noise)
-                # print(generated)
-                self.apply_zero_grad()
+                    toggle_grads(self.generator, False)
+                    toggle_grads(self.discriminator, True)
 
-                # disc_loss, disc_wd = self.calc_disc_loss(
-                #     real.detach(), generated.detach(), batch_size
-                # )
-                disc_loss = self.calc_disc_loss_simple(real, generated.detach())
+                    batch_size = real.shape[0]
+                    noise = sample_noise(batch_size, self.noise_dim).to(self.device)
 
-                assert not (torch.isnan(disc_loss))
-                if disc_loss.item() > .01:
-                    disc_loss.backward()
+                    generated = self.generator(noise)
+
+                    disc_loss = self.calc_disc_loss(real.detach(), generated.detach(), batch_size)
+                    # disc_loss = self.calc_disc_loss_simple(real, generated.detach())
+                    mean_disc_loss += disc_loss.item() / self.n_critic
+                    disc_loss.backward(retain_graph=True)
                     self.optimizer_d.step()
 
-                self.apply_zero_grad()
-
                 ## GENERATOR LEARNING
+
+                self.apply_zero_grad()
 
                 toggle_grads(self.generator, True)
                 toggle_grads(self.discriminator, False)
@@ -164,7 +163,7 @@ class Trainer():
 
                 self.optimizer_g.step()
 
-                pbar.set_postfix(gen_loss=gen_loss.item(), disc_loss=disc_loss.item())
+                pbar.set_postfix(gen_loss=gen_loss.item(), disc_loss=mean_disc_loss)
                 
                 toggle_grads(self.generator, False)
                 toggle_grads(self.discriminator, False)

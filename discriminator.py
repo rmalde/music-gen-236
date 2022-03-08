@@ -133,7 +133,7 @@ class Conv1d(nn.Module):
             sequence.append(nn.BatchNorm1d(output_channels))
 
         sequence.append(nn.LeakyReLU(negative_slope=alpha))
-        if shift_factor == 0:
+        if shift_factor > 0:
             sequence.append(self.phase_shuffle)
         
         if drop_prob > 0:
