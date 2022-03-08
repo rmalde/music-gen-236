@@ -145,9 +145,9 @@ class Trainer():
                 disc_loss = self.calc_disc_loss_simple(real, generated.detach())
 
                 assert not (torch.isnan(disc_loss))
-
-                disc_loss.backward()
-                self.optimizer_d.step()
+                if disc_loss.item() > .01:
+                    disc_loss.backward()
+                    self.optimizer_d.step()
 
                 self.apply_zero_grad()
 
