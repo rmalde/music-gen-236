@@ -121,6 +121,9 @@ class Conv1d(nn.Module):
         drop_prob=0,
     ):
         super(Conv1d, self).__init__()
+
+        self.phase_shuffle = PhaseShuffle(shift_factor)
+
         sequence = []
 
         conv1d = nn.Conv1d(input_channels, output_channels, kernel_size, stride=stride, padding=padding)
@@ -131,8 +134,7 @@ class Conv1d(nn.Module):
 
         sequence.append(nn.LeakyReLU(negative_slope=alpha))
         if shift_factor == 0:
-            # PhaseShuffle(shift_factor)
-            print("Phase shuffle not implemented yet")
+            sequence.append(self.phase_shuffle)
         
         if drop_prob > 0:
             sequence.append(nn.Dropout2d(drop_prob))
@@ -141,3 +143,39 @@ class Conv1d(nn.Module):
 
     def forward(self, x):
         return self.layer(x)
+
+
+class PhaseShuffle(nn.Module):
+    def __init__(self, shift_factor):
+        super(PhaseShuffle, self).__init__()
+        self.shift_factor = shift_factor
+    
+    def forward(self, x):
+        if self.shift_factor==0:
+            return x
+
+        k_list = (
+            torch.Tensor(x.shape[0]).random_(0, 2 * self.shift_factor + 1)
+            - self.shift_factor
+        )
+        k_list = k_list.numpy().astype(int)
+
+        k_map = {}
+        for idx, k in enumerate(k_list):
+            k = int(k)
+            if k not in k_map:
+                k_map[k] = []
+            k_map[k].append(idx)
+
+        x_shuffle = x.clone()
+
+        for k, idxs in k_map.items():
+            if k > 0:
+                x_shuffle[idxs] = F.pad(x[idxs][..., :-k], (k, 0), mode="reflect")
+            else:
+                x_shuffle[idxs] = F.pad(x[idxs][..., -k:], (0, -k), mode="reflect")
+
+        assert x_shuffle.shape == x.shape, "{}, {}".format(x_shuffle.shape, x.shape)
+        return x_shuffle
+
+        

@@ -17,8 +17,8 @@ from discriminator import WaveGANDiscriminator
 
 class Trainer():
     def __init__(
-        self, dataloader, device="cpu", epochs=10, noise_dim=NOISE_DIM,
-        output_dir=MODEL_OUTPUT_DIR, output_prefix="WaveGAN"
+        self, dataloader, device="cpu", epochs=EPOCHS, noise_dim=NOISE_DIM,
+        output_dir=MODEL_OUTPUT_DIR, output_prefix="WaveGAN", epochs_per_save=EPOCHS_PER_SAVE
     ):
         self.dataloader = dataloader
         self.epochs = epochs
