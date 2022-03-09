@@ -13,7 +13,8 @@ class WaveGANGenerator(nn.Module):
         dim_mul=32,
         model_size=64,
         slice_len=SLICE_LEN,
-        use_batch_norm=False
+        use_batch_norm=False,
+        use_style_gan=False
     ):
         super(WaveGANGenerator, self).__init__()
         assert slice_len in [65536] #leave as array for possibility of different lengths
@@ -21,7 +22,7 @@ class WaveGANGenerator(nn.Module):
         self.use_batch_norm = use_batch_norm
         self.dim_mul = dim_mul
         self.slice_len = slice_len
-        self.model_size = model_size
+        self.model_size = model_size,
         print("Model size: ", self.model_size)
 
         #[100] -> [16, 1024]
@@ -43,6 +44,7 @@ class WaveGANGenerator(nn.Module):
                 stride,
                 upsample=upsample,
                 use_batch_norm=use_batch_norm,
+                use_style_gan=use_style_gan
             ),
             Transpose1dLayer(
                 (self.dim_mul * self.model_size) // 2,
@@ -51,6 +53,7 @@ class WaveGANGenerator(nn.Module):
                 stride,
                 upsample=upsample,
                 use_batch_norm=use_batch_norm,
+                use_style_gan=use_style_gan
             ),
             Transpose1dLayer(
                 (self.dim_mul * self.model_size) // 4,
@@ -59,6 +62,7 @@ class WaveGANGenerator(nn.Module):
                 stride,
                 upsample=upsample,
                 use_batch_norm=use_batch_norm,
+                use_style_gan=use_style_gan
             ),
             Transpose1dLayer(
                 (self.dim_mul * self.model_size) // 8,
@@ -67,16 +71,19 @@ class WaveGANGenerator(nn.Module):
                 stride,
                 upsample=upsample,
                 use_batch_norm=use_batch_norm,
+                use_style_gan=use_style_gan
             ),
             Transpose1dLayer(
                 (self.dim_mul * self.model_size) // 16,
                 self.model_size,
                 25,
                 stride,
-                upsample=upsample
+                upsample=upsample,
+                use_style_gan=use_style_gan
             ),
             Transpose1dLayer(
-                self.model_size, 1, 25, stride, upsample=upsample
+                self.model_size, 1, 25, stride, upsample=upsample,
+                use_style_gan=use_style_gan
             )
         ]
 
@@ -107,7 +114,8 @@ class Transpose1dLayer(nn.Module):
         padding=11,
         upsample=None,
         output_padding=1,
-        use_batch_norm=False
+        use_batch_norm=False,
+        use_style_gan=False
     ):
         super(Transpose1dLayer, self).__init__()
         self.upsample = upsample
@@ -123,7 +131,9 @@ class Transpose1dLayer(nn.Module):
                 in_channels, out_channels, kernel_size, stride, padding, output_padding
             )
             sequence = [Conv1dTrans]
-
+        
+        if use_style_gan:
+            sequence.append(AdaIN(out_channels, NOISE_DIM))
         if use_batch_norm:
             batch_norm = nn.BatchNorm1d(out_channels)
             sequence.append(batch_norm)
@@ -134,3 +144,33 @@ class Transpose1dLayer(nn.Module):
         if self.upsample:
             x = nn.functional.interpolate(x, scale_factor=self.upsample, mode="nearest")
         return self.layer(x)
+
+class MappingLayers(nn.Module):
+    def __init__(self, z_dim, hidden_dim, w_dim):
+        super().__init__()
+        self.mapping = nn.Sequential(
+            nn.Linear((z_dim), (hidden_dim)),
+            nn.ReLU(),
+            nn.Linear((hidden_dim), (hidden_dim)),
+            nn.ReLU(),
+            nn.Linear((hidden_dim), (w_dim))
+        )
+
+    def forward(self, noise):
+        return self.mapping(noise)
+
+class AdaIN(nn.Module):
+    def __init__(self, channels, w_dim):
+        super().__init__()
+        self.instance_norm = nn.InstanceNorm1d(channels)
+
+        self.style_scale_transform = nn.Linear(w_dim, channels)
+        self.style_shift_transform = nn.Linear(w_dim, channels)
+
+    def forward(self, image, w):
+        normalized_image = self.instance_norm(image)
+        style_scale = self.style_scale_transform(w)[:, None, None]
+        style_shift = self.style_shift_transform(w)[:, None, None]
+        
+        transformed_image = style_scale * normalized_image + style_shift
+        return transformed_image

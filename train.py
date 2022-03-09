@@ -61,7 +61,6 @@ class Trainer():
             layer.bias.data.fill_(0)
     
     def calc_disc_loss(self, real, generated, batch_size):
-
         disc_out_gen = self.discriminator(generated)
         disc_out_real = self.discriminator(real)
 
@@ -77,6 +76,7 @@ class Trainer():
             retain_graph=True
         )[0]
         # calculate gradient penalty
+
         grad_penalty = (
             PENALTY_COEFF
             * ((gradients.view(gradients.size(0), -1).norm(2, dim=1) - 1) ** 2).mean()
@@ -131,7 +131,6 @@ class Trainer():
                 mean_disc_loss = 0
 
                 ###DISCRIMINATOR LEARNING 
-
                 for _ in range(self.n_critic):
                     self.apply_zero_grad()
 
@@ -146,7 +145,9 @@ class Trainer():
                     disc_loss = self.calc_disc_loss(real.detach(), generated.detach(), batch_size)
                     # disc_loss = self.calc_disc_loss_simple(real, generated.detach())
                     mean_disc_loss += disc_loss.item() / self.n_critic
+
                     disc_loss.backward(retain_graph=True)
+                    
                     self.optimizer_d.step()
 
                 ## GENERATOR LEARNING
