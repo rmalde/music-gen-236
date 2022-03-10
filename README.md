@@ -1,5 +1,5 @@
 # Generating Polyphonic Music with Adversarial Networks
-Final Project for CS 236G: General Adversarial Networks. Using DCGAN's and approaches from StyleGAN to generate raw audio of EDM music. 
+Final Project for CS 236G: General Adversarial Networks. Using DCGAN's and approaches from StyleGAN to generate raw audio of EDM music. Link to final paper: [Final Paper](https://github.com/rmalde/music-gen-236/blob/main/236%20Final%20Paper.pdf)
 
 ## Environment
 
