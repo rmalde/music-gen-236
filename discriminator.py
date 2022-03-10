@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from params import *
 
 class WaveGANDiscriminator(nn.Module):
+    '''Discriminator with structure similar to WaveGAN paper'''
     def __init__(
         self,
         model_size=64,
@@ -107,6 +108,7 @@ class WaveGANDiscriminator(nn.Module):
 
 
 class Conv1d(nn.Module):
+    '''1d Convolutions for WaveGAN Discriminator'''
     def __init__(
         self,
         input_channels,
@@ -145,6 +147,12 @@ class Conv1d(nn.Module):
 
 
 class PhaseShuffle(nn.Module):
+    '''
+    Phase Shuffle module, similar to implementation in WaveGAN paper.
+    Shifts the inputs at each layer slightly along the time axis so that
+    the discriminator does not learn to distinguish the exact phase of
+    real vs generated. 
+    '''
     def __init__(self, shift_factor):
         super(PhaseShuffle, self).__init__()
         self.shift_factor = shift_factor
@@ -178,6 +186,7 @@ class PhaseShuffle(nn.Module):
         return x_shuffle
 
 class TransGANDiscriminator(nn.Module):
+    '''Transformer GAN Discriminator, similar architecture to TransGAN paper, adapted to audio'''
     def __init__(
         self,
         noise_dim=NOISE_DIM,
@@ -236,6 +245,7 @@ class TransGANDiscriminator(nn.Module):
         return x
 
 class Transformer1dLayer(nn.Module):
+    '''Single layer for TransGAN'''
     def __init__(
         self,
         in_channels,

@@ -183,7 +183,7 @@ class AdaIN(nn.Module):
         return transformed_image
 
 class TransGANGenerator(nn.Module):
-    '''Transformer GAN model, similar architecture to TransGAN paper, adapted to audio'''
+    '''Transformer GAN Generator, similar architecture to TransGAN paper, adapted to audio'''
     def __init__(
         self,
         noise_dim=NOISE_DIM,
