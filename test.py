@@ -12,6 +12,7 @@ import numpy as np
 
 
 class Tester():
+    '''Testing framework to test trained model'''
     def __init__(self, generator, discriminator, dataset=None, device="cpu"):
         self.generator = generator.to(device)
         self.discriminator = discriminator
@@ -32,6 +33,7 @@ class Tester():
         return frequency
 
     def test(self):
+        '''Prints evaluation metrics of average and std pitches'''
         samples = self.gen_n_samples(1)
         average_pitches = []
         std_pitches = []
@@ -45,6 +47,7 @@ class Tester():
         print("Std pitch:", np.mean(std_pitches))
 
 if __name__ == "__main__":
+    #TODO: Add argparse
     device = get_device()
 
     # dataset = SongDataset(load_path=os.path.join(PREPROCESSED_DATA_DIR, "train.pt"))

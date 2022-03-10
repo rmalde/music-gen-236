@@ -17,9 +17,24 @@ $ python dataset.py -d [[tr]ain, [d]ev, [t]est] --load
 
 ## Training
 ```
-$ python train.py
+Usage: train.py [-h] [--model WaveGAN] [--epochs 20]
+                [--epochs_per_save 10] [--batch_size 4]
+                [--n_critic 5] [--phase_shuffle] [--spectral_norm]
+                [--warmup] [--style_gan]
+
+optional arguments:
+   -h, --help           show this help message and exit
+  --model MODEL         Model architecture [WaveGAN, TransGAN]. Default: WaveGAN
+  --epochs EPOCHS       Training epochs. Default: 20
+  --epochs_per_save     Save model every n epochs. Default: 10
+  --batch_size          Batch size. Default: 4
+  --n_critic            n disc updates for 1 gen update. Default: 5
+  --phase_shuffle       Use phase shuffle. Default: False
+  --spectral_norm       Use spectral norm. Default: False
+  --warmup              Use warmup. Default: False
+  --style_gan           Use AdaIN from StyleGAN. Default: False
 ```
-TODO: Add command line options for training different combinations of models
+
 
 ## Evaluation
 ```

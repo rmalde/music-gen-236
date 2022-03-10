@@ -6,6 +6,7 @@ from params import *
 
 
 class WaveGANGenerator(nn.Module):
+    '''Generator with structure similar to WaveGAN paper'''
     def __init__(
         self,
         noise_dim=NOISE_DIM,
@@ -105,6 +106,7 @@ class WaveGANGenerator(nn.Module):
 
 
 class Transpose1dLayer(nn.Module):
+    """Transpose Convolution layer for WaveGAN"""
     def __init__(
         self,
         in_channels,
@@ -115,7 +117,7 @@ class Transpose1dLayer(nn.Module):
         upsample=None,
         output_padding=1,
         use_batch_norm=False,
-        use_style_gan=False
+        style_gan=False
     ):
         super(Transpose1dLayer, self).__init__()
         self.upsample = upsample
@@ -132,7 +134,7 @@ class Transpose1dLayer(nn.Module):
             )
             sequence = [Conv1dTrans]
         
-        if use_style_gan:
+        if style_gan:
             sequence.append(AdaIN(out_channels, NOISE_DIM))
         if use_batch_norm:
             batch_norm = nn.BatchNorm1d(out_channels)
@@ -142,10 +144,14 @@ class Transpose1dLayer(nn.Module):
 
     def forward(self, x):
         if self.upsample:
-            x = nn.functional.interpolate(x, scale_factor=self.upsample, mode="nearest")
+            x = F.interpolate(x, scale_factor=self.upsample, mode="nearest")
         return self.layer(x)
 
 class MappingLayers(nn.Module):
+    '''
+    MLP in StyleGAN to map intermediate noise vectors to style properties.
+    Currently unused, integrate for controllability of styles. 
+    '''
     def __init__(self, z_dim, hidden_dim, w_dim):
         super().__init__()
         self.mapping = nn.Sequential(
@@ -160,6 +166,7 @@ class MappingLayers(nn.Module):
         return self.mapping(noise)
 
 class AdaIN(nn.Module):
+    '''StyleGAN AdaIN'''
     def __init__(self, channels, w_dim):
         super().__init__()
         self.instance_norm = nn.InstanceNorm1d(channels)
@@ -174,3 +181,94 @@ class AdaIN(nn.Module):
         
         transformed_image = style_scale * normalized_image + style_shift
         return transformed_image
+
+class TransGANGenerator(nn.Module):
+    '''Transformer GAN model, similar architecture to TransGAN paper, adapted to audio'''
+    def __init__(
+        self,
+        noise_dim=NOISE_DIM,
+        upsample=True,
+        dim_mul=32,
+        model_size=64,
+        slice_len=SLICE_LEN,
+        use_batch_norm=True, 
+    ):
+        super().__init__()
+        self.model_size = model_size
+        self.dim_mul = dim_mul
+        self.use_batch_norm = use_batch_norm
+
+        self.fc1 = nn.Linear(noise_dim, 4 * 4 * self.model_size * self.dim_mul)
+
+        self.bn1 = nn.BatchNorm1d(num_features=self.model_size * self.dim_mul)
+
+        transformer_layers = [
+            Transformer1dLayer(
+                self.dim_mul * self.model_size,
+                (self.dim_mul * self.model_size) // 2
+            ),
+            Transformer1dLayer(
+                (self.dim_mul * self.model_size) // 2,
+                (self.dim_mul * self.model_size) // 4
+            ),
+            Transformer1dLayer(
+                (self.dim_mul * self.model_size) // 4,
+                (self.dim_mul * self.model_size) // 8
+            ),
+            Transformer1dLayer(
+                (self.dim_mul * self.model_size) // 8,
+                (self.dim_mul * self.model_size) // 16
+            ),
+            Transformer1dLayer(
+                (self.dim_mul * self.model_size) // 16,
+                self.model_size
+            ),
+            Transformer1dLayer(
+                self.model_size, 1
+            )
+        ]
+        self.transformer_list = nn.ModuleList(transformer_layers)
+    def forward(self, x):
+        x = self.fc1(x)
+        x = x.view(-1, self.dim_mul * self.model_size, 16)
+        if self.use_batch_norm:
+            x = self.bn1(x)
+        x = F.relu(x)
+        for transformer in self.transformer_list[:-1]:
+            x = F.relu(transformer(x))
+        x = torch.tanh(self.tconv_list[-1](x))
+        return x
+
+class Transformer1dLayer(nn.Module):
+    '''Upsampling Transformer Encoding layers for TransGAN'''
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=25,
+        use_batch_norm=True,
+        n_head=8,
+        upsample=4
+    ):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.use_batch_norm = use_batch_norm
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.n_head = n_head
+
+        self.reflection_pad = nn.ConstantPad1d(self.kernel_size//2, value=0)
+        encoder_layer = nn.TransformerEncoderLayer(self.in_channels, self.n_head)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=6)
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.upsample, mode="nearest")
+        x = self.reflection_pad(x)
+        x = self.transformer(x)
+        
+        if self.use_batch_norm:
+            batch_norm = nn.BatchNorm1d(self.out_channels)
+            x = batch_norm(x)
+        
+        
+        

@@ -13,6 +13,7 @@ class WaveGANDiscriminator(nn.Module):
         dim_mul=32,
         slice_len=SLICE_LEN,
         use_batch_norm=False,
+        spectral_norm=False,
     ):
         super(WaveGANDiscriminator, self).__init__()
         assert slice_len in [65536] #leave as array for possibility of different lengths
@@ -99,12 +100,10 @@ class WaveGANDiscriminator(nn.Module):
         for conv in self.conv_layers:
             x = conv(x)
         x =  x.view(-1, self.fc_input_size)
-        # x = nn.utils.spectral_norm(x)
+        if self.spectral_norm:
+            x = nn.utils.spectral_norm(x)
 
         return self.fc1(x)
-
-
-
 
 
 class Conv1d(nn.Module):
@@ -177,5 +176,99 @@ class PhaseShuffle(nn.Module):
 
         assert x_shuffle.shape == x.shape, "{}, {}".format(x_shuffle.shape, x.shape)
         return x_shuffle
+
+class TransGANDiscriminator(nn.Module):
+    def __init__(
+        self,
+        noise_dim=NOISE_DIM,
+        upsample=True,
+        dim_mul=32,
+        model_size=64,
+        slice_len=SLICE_LEN,
+        use_batch_norm=True, 
+    ):
+        super().__init__()
+        self.model_size = model_size
+        self.dim_mul = dim_mul
+        self.use_batch_norm = use_batch_norm
+        self.slice_len = slice_len
+
+        transformer_layers = [
+            Transformer1dLayer(
+                1,
+                self.model_size
+            ),
+            Transformer1dLayer(
+                self.model_size,
+                self.model_size * 2
+            ),
+            Transformer1dLayer(
+                self.model_size * 2,
+                self.model_size * 4
+            ),
+            Transformer1dLayer(
+                self.model_size * 4,
+                self.model_size * 8
+            ),
+            Transformer1dLayer(
+                self.model_size * 8,
+                self.model_size * 16
+            ),
+            Transformer1dLayer(
+                self.model_size * 16,
+                self.model_size * 32
+            )
+        ]
+        self.transformer_list = nn.ModuleList(transformer_layers)
+
+        self.fc1 = nn.Linear(self.slice_len, 1)
+
+        self.bn1 = nn.BatchNorm1d(num_features=self.model_size * self.dim_mul)
+
+    def forward(self, x):
+
+        for conv in self.conv_layers:
+            x = conv(x)
+        x =  x.view(-1, self.fc_input_size)
+        if self.use_batch_norm:
+            x = self.bn1(x)
+        x = self.fc1(x)
+        return x
+
+class Transformer1dLayer(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=25,
+        use_batch_norm=True,
+        n_head=8,
+        alpha=0.2,
+    ):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.use_batch_norm = use_batch_norm
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.n_head = n_head
+        self.alpha = alpha
+
+        encoder_layer = nn.TransformerEncoderLayer(self.in_channels, self.n_head)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=6)
+
+    def forward(self, x):
+        x = self.transformer(x)
+        
+        if self.use_batch_norm:
+            batch_norm = nn.BatchNorm1d(self.out_channels)
+            x = batch_norm(x)
+
+        x = nn.LeakyReLU(negative_slope=self.alpha)(x)
+        B, H, W = x.shape
+        x = x.view(B, -1, self.out_channels)
+        return x
+
+
+        
 
         

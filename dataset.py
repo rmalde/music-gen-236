@@ -13,8 +13,18 @@ from params import *
 
 
 class SongDataset(Dataset):
-    # TODO add functionality for variable clip len
+    '''
+    Constructs torch.utils.data.Dataset object for use in training and testing
+    '''
     def __init__(self, clip_len=SLICE_LEN, data_path= None, save_path=None, load_path=None):
+        '''
+        Initializes dataset object. Cmdline Options:
+        --load:
+            Load saved dataset from train, dev, test, as specified
+        else (default):
+            Construct dataset from raw audio files as specified
+            Save dataset to file as specified
+        '''
         if load_path:
             self.sequences = torch.load(load_path)
             self.sequences_len = self.sequences.shape[0]
@@ -64,6 +74,14 @@ class SongDataset(Dataset):
 
 #for testing
 if __name__ == '__main__':
+    '''
+    usage: dataset.py [-h] [-d train] [--load]
+
+    optional arguments:
+        -h, --help          show this help message and exit
+        -d, --dataset       Dataset from: {[tr]ain, [d]ev, [te]st}. Default: dev
+        --load              load dataset. Default: False
+    '''
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", help="Dataset from: {[tr]ain, [d]ev, [te]st}", default="dev")
     parser.add_argument("--load", help="load dataset", action="store_true")

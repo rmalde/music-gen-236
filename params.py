@@ -8,14 +8,17 @@ PREPROCESSED_DATA_DIR = "preprocessed_data/"
 
 # MODELS
 NOISE_DIM = 100
+WAVEGAN = "WaveGAN"
+TRANSGAN = "TransGAN"
 
 # TRAINING
 BATCH_SIZE = 4
-EPOCHS = 1000
+EPOCHS = 20
 EPOCHS_PER_SAVE = 10
+N_CRITIC = 5
 
 LR_G = 1e-5
-LR_D = 1e-5 # you can use with discriminator having a larger learning rate than generator instead of using n_critic updates ttur https://arxiv.org/abs/1706.08500
+LR_D = 1e-5
 BETA1 = 0.5
 BETA2 = 0.9
 
