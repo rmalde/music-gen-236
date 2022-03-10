@@ -1,6 +1,13 @@
 # Generating Polyphonic Music with Adversarial Networks
 Final Project for CS 236G: General Adversarial Networks. Using DCGAN's and approaches from StyleGAN to generate raw audio of EDM music. 
 
+## Environment
+
+Create new conda environment from environment.yml
+```
+$ conda env create -f environment.yml
+```
+
 ## Data
 For the project, I trained on the Beatport EDM Dataset, which can be found here: [Beatport EDM Key Dataset | Zenodo](https://zenodo.org/record/1101082#.Yg7VIojMJEZ)
 The models can be trained on any dataset however, as long the as the files are in a common sound format, like mp3 or wav. 
